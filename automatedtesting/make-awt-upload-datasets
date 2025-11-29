@@ -1,0 +1,48 @@
+#!/bin/bash
+#
+# make-awt-upload-datasets - make weekly awt upload datasets
+#
+# Copyright 2013-24, Andrew McNab for the University of Manchester
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# You can use this script to make a series of weekly awt upload datasets 
+# for the rest of the current year. The lifetimes of the datasets get longer
+# and longer, chosen so that each one expires a week after the week its
+# name refers to.
+#
+# This script should ideally be run as Big Ben in London signals the start
+# of each new year in UTC :-) 
+
+echo 'MetaCat whoami:'
+metacat auth whoami
+echo
+echo 'Rucio whoami:'
+rucio whoami
+echo
+
+y=`date --utc +'%Y'`
+current_week=`date --utc +'%W'`
+w=$current_week
+
+while [ $w -lt 54 ]
+do
+ upload_dataset=`printf "awt-uploads-%d%02d" $y $w`
+ lifetime=`expr \( $w - $current_week + 1 \) \* 604800`
+ metacat dataset create testpro:$upload_dataset
+ rucio add-dataset --lifetime $lifetime testpro:$upload_dataset 
+ rucio add-rule --lifetime $lifetime testpro:$upload_dataset \
+   1 DUNE_US_FNAL_DISK_STAGE
+ w=`expr $w + 1`
+done

@@ -1,10 +1,10 @@
-.TH JUSTIN  "2023" "justin-test-jobscript" "justIN Manual"
+.TH JUSTIN  "2024" "justin-test-jobscript" "justIN Manual"
 .SH NAME
 .B justin-test-jobscript
 \- interactive testing of justIN jobscripts
 .SH SYNOPSIS
 .B justin-test-jobscript [--help] --jobscript FILENAME
-.B --mql MQL [--env NAME=VALUE]
+.B --mql MQL|--monte-carlo COUNT [--env NAME=VALUE]
 .SH DESCRIPTION
 .B justin-test-jobscript
 is a command-line utility to test jobscripts which normally run inside justIN 
@@ -46,7 +46,19 @@ MetaCat MQL expression use to find input files.
 uses the 
 .B justin show-replicas
 command to find the replicas using MetaCat and Rucio queries by the justIN
-service.
+service. 
+This option is required if 
+.B --monte-carlo
+is not given.
+
+.HP 
+.B "--monte-carlo COUNT"
+.br
+This causes a Monte Carlo counter file to be given to the jobscript 
+instead of an input file found from MetaCat.
+This option is required if 
+.B --mql
+is not given.
 
 .HP 
 .B "--env NAME=VALUE"
@@ -56,15 +68,12 @@ which will be set inside the container.
 
 .SH EXAMPLE
 
-In this example we make a local copy of a jobscript from the Jobscripts
-Library and then run it using the
+In this example run a local copy of a jobscript using the
 .B justin-test-jobscript
 command, using the jobscript's $NUM_EVENTS variable to limit processing to
 the first event of the input file.
 
 .nf 
-justin show-jobscript --jobscript-id dc4-vd-coldbox-top:default \\
-  > my-dc4-vd-coldbox-top.jobscript
 
 justin-test-jobscript --mql \\
  "files from dc4:dc4 where core.run_type='dc4-vd-coldbox-top' limit 10" \\

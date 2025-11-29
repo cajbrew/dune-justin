@@ -20,17 +20,25 @@
 # To be run by the mod_wsgi WSGIImportScript directive in the Apache
 # configuration.
 
+#import MySQLdb
+# WE NEED TO REMOVE OLD MySQLdb REFERENCES STILL!
+import pymysql
+pymysql.install_as_MySQLdb()
+MySQLdb=pymysql
+
 import sys
-import MySQLdb
+import socket
 import justin
 
 justin.readConf()
 
 try:
-  justin.conn = MySQLdb.connect(host=justin.mysqlHostname,
-                                user=justin.mysqlUsername,
-                                passwd=justin.mysqlPassword,
-                                db=justin.mysqlDbName)
+  justin.conn = MySQLdb.connect( 
+                    host       = socket.gethostbyname(justin.mysqlHostname),
+                    user       = justin.mysqlUsername,
+                    passwd     = justin.mysqlPassword,
+                    db         = justin.mysqlDbName,
+                    autocommit = False)
   justin.conn.autocommit(False)
   justin.cur = justin.conn.cursor(MySQLdb.cursors.DictCursor)
 
@@ -42,23 +50,20 @@ except Exception as e:
 else:
   print('Connected to %s database' % justin.mysqlDbName, file=sys.stderr)
 
-
 #
 # Load X.509 proxy files into global strings
 #
-
-try:
-  with open(justin.jobsNoRolesProxyFile, 'rb') as f:
-    justin.jobsNoRolesProxyString = f.read()
-except:
-  print('Failed loading X.509 proxy from %s : %s'
-        % (justin.jobsNoRolesProxyFile, str(e)), file=sys.stderr)
-
-try:
-  with open(justin.jobsProductionProxyFile, 'rb') as f:
-    justin.jobsProductionProxyString = f.read()
-except:
-  print('Failed loading X.509 proxy from %s : %s'
-        % (justin.jobsProductionProxyFile, str(e)), file=sys.stderr)
-  
+#try:
+#  with open(justin.jobsNoRolesProxyFile, 'rb') as f:
+#    justin.jobsNoRolesProxyString = f.read()
+#except:
+#  print('Failed loading X.509 proxy from %s : %s'
+#        % (justin.jobsNoRolesProxyFile, str(e)), file=sys.stderr)
+#
+#try:
+#  with open(justin.jobsProductionProxyFile, 'rb') as f:
+#    justin.jobsProductionProxyString = f.read()
+#except:
+#  print('Failed loading X.509 proxy from %s : %s'
+#        % (justin.jobsProductionProxyFile, str(e)), file=sys.stderr)
 
