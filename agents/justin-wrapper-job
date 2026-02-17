@@ -517,7 +517,8 @@ def createDatasets(datasets):
   return (outcome.returncode, outcome.stdout)
   
 ########################################################################
-os.environ['TZ'] = 'UTC0'
+os.environ['TZ'] = 'UTC'
+time.tzset()
 logLine('====Start of justin-wrapper-job====')
 
 for i in sorted(os.environ):
@@ -923,7 +924,7 @@ if resultsResponseDict['status'] == 410:
   sys.exit(0)
 
 if resultsResponseDict['status'] != 200:
-  logLine('record_results returns:' % resultsResponseDict['response'])
+  logLine('record_results returns: ' + str(resultsResponseDict['response']))
   jobAborted(312, 'record_results', '')
 
 logLine('Output RSEs: ' + str(resultsResponseDict['output_rses']))

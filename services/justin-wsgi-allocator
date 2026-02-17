@@ -32,7 +32,12 @@ import random
 import string
 import urllib
 import hashlib
-import M2Crypto
+
+#import M2Crypto
+
+# After 0.39.0, M2Crypto needs "from M2Crypto import" syntax 
+from M2Crypto import RSA,BIO,X509,ASN1,EVP
+
 #import htcondor
 
 import justin
@@ -398,22 +403,22 @@ def delegateJobsProxy(newCertRequest, jobsProxyString):
   if not jobsProxyString:
     print('Failed to read proxy file from disk?', file=sys.stderr)
 
-  jobsProxyKey      = M2Crypto.RSA.load_key_string(jobsProxyString)
-  jobsProxyCertsBIO = M2Crypto.BIO.MemoryBuffer(jobsProxyString)
+  jobsProxyKey      = RSA.load_key_string(jobsProxyString)
+  jobsProxyCertsBIO = BIO.MemoryBuffer(jobsProxyString)
 
   jobsProxyCerts = []
   while True:
     try:
-      jobsProxyCerts.append(M2Crypto.X509.load_cert_bio(jobsProxyCertsBIO))
+      jobsProxyCerts.append(X509.load_cert_bio(jobsProxyCertsBIO))
     except:
       jobsProxyCertsBIO.close()
       break
 
-  newPubKey = M2Crypto.X509.load_request_string(newCertRequest, 
-                                       M2Crypto.X509.FORMAT_PEM).get_pubkey()
+  newPubKey = X509.load_request_string(newCertRequest, 
+                                       X509.FORMAT_PEM).get_pubkey()
 
   # Create and populate new certificate   
-  newCert = M2Crypto.X509.X509()
+  newCert = X509.X509()
   newCert.set_pubkey(newPubKey)
   newCert.set_serial_number(int(time.time() * 100))
   newCert.set_issuer_name(jobsProxyCerts[0].get_subject())
@@ -431,25 +436,25 @@ def delegateJobsProxy(newCertRequest, jobsProxyString):
   newCert.set_subject_name(newSubject)
 
   # Set not before time to now
-  newNotBefore = M2Crypto.ASN1.ASN1_UTCTIME()
+  newNotBefore = ASN1.ASN1_UTCTIME()
   newNotBefore.set_time(int(time.time()))
   newCert.set_not_before(newNotBefore)
 
   # Set not after time to now + 7 days
-  newNotAfter = M2Crypto.ASN1.ASN1_UTCTIME()
+  newNotAfter = ASN1.ASN1_UTCTIME()
   newNotAfter.set_time(int(time.time()) + 604800)
   newCert.set_not_after(newNotAfter)
 
   # Usual extension giving key usage
-  newCert.add_ext(M2Crypto.X509.new_extension("keyUsage", 
+  newCert.add_ext(X509.new_extension("keyUsage", 
                   "Digital Signature, Key Encipherment, Key Agreement", 1))
 
   # Special extension for RFC X.509 proxies 
-  newCert.add_ext(M2Crypto.X509.new_extension("proxyCertInfo", 
+  newCert.add_ext(X509.new_extension("proxyCertInfo", 
                   "critical, language:1.3.6.1.4.1.3536.1.1.1.9", 1, 0))
 
   # Sign this new cert with the VOMS proxy private key
-  jobsProxyKeyEVP = M2Crypto.EVP.PKey()
+  jobsProxyKeyEVP = EVP.PKey()
   jobsProxyKeyEVP.assign_rsa(jobsProxyKey)
   newCert.sign(jobsProxyKeyEVP, 'sha256')
 
@@ -714,9 +719,9 @@ def getJobscriptMethod(startResponse, jsonDict, environ):
   try:
     if jsonDict['gpu_uuid']:
       gpuInfo = ('%s %s %s %s %dMiB' 
-                    % (jsonDict['gpu_name'], jsonDict['gpu_driver_version'],
-                       jsonDict['gpu_compute_cap'], jsonDict['gpu_vbios_version'],
-                       int(jsonDict['gpu_nonreserved_bytes'] / 1048576)))
+                  % (jsonDict['gpu_name'], jsonDict['gpu_driver_version'],
+                     jsonDict['gpu_compute_cap'], jsonDict['gpu_vbios_version'],
+                     int(jsonDict['gpu_nonreserved_bytes'] / 1048576)))
     else:
       gpuInfo = ''
 
@@ -1627,10 +1632,15 @@ def recordResultsMethod(startResponse, jsonDict):
              'jobs.site_id, jobs.entry_id, users.access_token, '
              'jobs.has_inner_apptainer, jobs.job_state, workflows.state, '
              'scope_name, jobs.requested_gpu, scopes.quota_id, '
-             'quota_name, named_quotas.processing_enabled '
+             'principal_name, '
+             'users.processing_enabled AS user_processing_enabled, '
+             'quota_name, '
+             'named_quotas.processing_enabled AS quota_processing_enabled '
              'FROM jobs '
              'LEFT JOIN workflows ON workflows.workflow_id=jobs.workflow_id '
              'LEFT JOIN users ON users.user_id=workflows.user_id '
+             'LEFT JOIN principal_names '
+             'ON users.main_pn_id=principal_names.pn_id '
              'LEFT JOIN scopes ON workflows.scope_id=scopes.scope_id '
              'LEFT JOIN named_quotas ON named_quotas.quota_id=scopes.quota_id '
              'WHERE jobs.jobsub_id="' + jsonDict['jobsub_id'] + '"')
@@ -1648,10 +1658,10 @@ def recordResultsMethod(startResponse, jsonDict):
     jobState          = row['job_state']
     responseDict['user_access_token'] = row['access_token']
     quotaID           = row['quota_id']
-  except:
+  except Exception as e: 
     return httpError(startResponse,
                      '500 Internal Server Error',
-                     'Failed finding job')
+                     'Failed finding job: ' + str(e))
 
   # This is mainly to catch outputs from workflows what have been aborted
   # by the user
@@ -1661,11 +1671,17 @@ def recordResultsMethod(startResponse, jsonDict):
                      'Cannot record results as workflow now in %s state' 
                      % row['state'])
     
-  if not row['processing_enabled']:
+  if not row['user_processing_enabled']:
     return httpError(startResponse,
-                  '410 Gone', 
-                  'Cannot record results as processing now not enabled for %s'
-                  % row['quota_name'])
+            '403 Forbidden', 
+            'Cannot record results as processing now not enabled for user  %s'
+            % row['principal_name'])
+
+  if not row['quota_processing_enabled']:
+    return httpError(startResponse,
+            '403 Forbidden', 
+            'Cannot record results as processing now not enabled for quota %s'
+            % row['quota_name'])
 
   if jobState != 'started' and jobState != 'processing':
     return httpError(startResponse, 
